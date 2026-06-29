@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.skyblock</groupId>
+  <artifactId>skyblock-plugin</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <name>Skyblock</name>
+  <description>Custom Skyblock server plugin for Paper.</description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>21</maven.compiler.release>
+    <!-- Paper API version. The enchantment constants used in this codebase
+         (POWER, SHARPNESS, EFFICIENCY, LUCK_OF_THE_SEA, ...) require the
+         post-1.20.5 naming scheme, so this must stay >= 1.20.5. Bump the
+         patch number freely (e.g. 1.21.8-R0.1-SNAPSHOT) to track newer
+         Paper builds; just keep the "-R0.1-SNAPSHOT" suffix used for all
+         1.21.x releases up to 1.21.11. -->
+    <paper.version>1.21.4-R0.1-SNAPSHOT</paper.version>
+  </properties>
+
+  <repositories>
+    <repository>
+      <id>papermc</id>
+      <url>https://repo.papermc.io/repository/maven-public/</url>
+    </repository>
+  </repositories>
+
+  <dependencies>
+    <!-- Paper API: provided because the running server supplies it. -->
+    <dependency>
+      <groupId>io.papermc.paper</groupId>
+      <artifactId>paper-api</artifactId>
+      <version>${paper.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- IslandStorage.java uses Gson directly for islands.json persistence.
+         Paper already bundles Gson on the server classpath at runtime, so
+         this stays "provided" — declared explicitly only so the compiler
+         can resolve com.google.gson.* without relying on paper-api's
+         transitive dependency resolution. -->
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>2.10.1</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>${project.artifactId}-${project.version}</finalName>
+
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+      </plugin>
+    </plugins>
+  </build>
+</project>
