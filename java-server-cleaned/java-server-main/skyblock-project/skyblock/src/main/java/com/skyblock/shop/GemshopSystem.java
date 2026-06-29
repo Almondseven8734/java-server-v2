@@ -109,8 +109,8 @@ public class GemshopSystem implements CommandExecutor, Listener {
         return List.of(
             new ShopEntry(EntryType.ROD_BASIC, null,
                 "§fFishing Rod",
-                List.of("§7A basic fishing rod", "", "§7Price: §e1 gem"),
-                Material.FISHING_ROD, 1, false),
+                List.of("§7A basic fishing rod", "", "§7Price: §eFREE"),
+                Material.FISHING_ROD, 0, false),
 
             new ShopEntry(EntryType.ROD_PRO, null,
                 "§bPro Fishing Rod",

@@ -1,6 +1,7 @@
 package com.skyblock.admin;
 
 import com.skyblock.protection.SpawnProtection;
+import com.skyblock.shop.AdminShopSystem;
 import com.skyblock.island.IslandData;
 import com.skyblock.island.IslandStorage;
 import org.bukkit.Bukkit;

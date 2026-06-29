@@ -1,5 +1,6 @@
 package com.skyblock.commands;
 
+import com.skyblock.shop.ShopSystem;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;

@@ -8,6 +8,7 @@ import org.bukkit.entity.Monster;
 import org.bukkit.entity.Animals;
 import org.bukkit.entity.Ambient;
 import org.bukkit.entity.WaterMob;
+import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -68,6 +69,8 @@ public class SpawnMobControl implements Listener {
     private static boolean isMob(Entity entity) {
         // Exclude players — never touch them
         if (entity instanceof Player) return false;
+        // Exclude armor stands — used for floating text / decorations
+        if (entity instanceof ArmorStand) return false;
         // Target all living non-player entities: monsters, animals, ambient, water mobs, etc.
         return entity instanceof LivingEntity;
     }
@@ -78,6 +81,9 @@ public class SpawnMobControl implements Listener {
     public void onCreatureSpawn(CreatureSpawnEvent event) {
         // Don't block NPC / Citizens / Sentinels — they register as CUSTOM
         if (event.getSpawnReason() == CreatureSpawnEvent.SpawnReason.CUSTOM) return;
+
+        // Don't block armor stands — used for floating text / decorations
+        if (event.getEntityType() == EntityType.ARMOR_STAND) return;
 
         Location loc = event.getLocation();
         if (!isInMobFreeZone(loc)) return;

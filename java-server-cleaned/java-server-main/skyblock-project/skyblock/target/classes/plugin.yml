@@ -1,0 +1,113 @@
+name: Skyblock
+main: com.skyblock.SkyblockPlugin
+version: '1.0.0'
+api-version: '1.21'
+author: YourName
+description: Custom Skyblock server plugin (translated from a Bedrock/JS script pack).
+softdepend: [BungeeCord]
+
+permissions:
+  skyblock.dev:
+    description: Access to developer/debug tools (e.g. /testforms).
+    default: op
+
+commands:
+  admin:
+    description: Open the admin panel
+    usage: /admin
+  ah:
+    description: Open the auction house
+    usage: /ah
+  bal:
+    description: Check your money balance
+    usage: /bal
+  crates:
+    description: Teleport to crates
+    usage: /crates
+  fish:
+    description: Teleport to the custom fishing zone
+    usage: /fish
+  gemshop:
+    description: Open the gem shop
+    usage: /gemshop
+  is:
+    description: Skyblock island commands
+    usage: /is <create|go|spawn|leave|reset|confirm|accept|deny|info|invite|remove|setrank|op|name|help>
+  mine:
+    description: Teleport to the mine
+    usage: /mine
+  resetmine:
+    description: Manually reset the mine (admin only)
+    usage: /resetmine
+  minigames:
+    description: Transfer to the minigames server
+    usage: /minigames
+  dungeons:
+    description: Information about the dungeons
+    usage: /dungeons
+  pvp:
+    description: Teleport to the PvP arena
+    usage: /pvp
+  pay:
+    description: Send money to another player
+    usage: /pay <player> <amount>
+  pwarp:
+    description: Browse or teleport to public island warps
+    usage: /pwarp [warpname]
+    aliases: [pw]
+  setwarp:
+    description: Set a public warp at your location
+    usage: /setwarp <name>
+  delwarp:
+    description: Delete a public warp
+    usage: /delwarp <name>
+  sell:
+    description: Open the sell menu — click items in your inventory to sell them instantly
+    usage: /sell
+  sellall:
+    description: Instantly sell all sellable items in your inventory
+    usage: /sellall
+  shop:
+    description: Open the shop menu
+    usage: /shop
+  spawn:
+    description: Teleport to spawn
+    usage: /spawn
+  hub:
+    description: Teleport to hub/spawn
+    usage: /hub
+  trash:
+    description: Open the trash/disposal bin to destroy unwanted items
+    usage: /trash
+  vault:
+    description: Open your private, persistent vault storage
+    usage: /vault [vault number]
+    aliases: [pv, playervault]
+  vote:
+    description: Claim your vote reward
+    usage: /vote
+  testforms:
+    description: Dev GUI test tool
+    usage: /testforms <test|testchest>
+    permission: skyblock.dev
+  fly:
+    description: Toggle flight on your island
+    usage: /fly
+  killshop:
+    description: Spend 25 kill credits for a Kill Key
+    usage: /killshop
+  kills:
+    description: View your kill and death statistics
+    usage: /kills [player]
+  tpa:
+    description: Request to teleport to another player
+    usage: /tpa <player>
+  tphere:
+    description: Request another player to teleport to you
+    usage: /tphere <player>
+  tpaccept:
+    description: Accept a pending teleport request
+    usage: /tpaccept
+  tpdeny:
+    description: Deny a pending teleport request
+    usage: /tpdeny
