@@ -157,7 +157,7 @@ public class SidebarSystem implements Listener {
 
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.US);
 
-        setLine(board, obj, 8, "§a§r", ChatColor.YELLOW + "💰 " + ChatColor.WHITE + "Money: "   + ChatColor.GREEN + "$" + nf.format(money));
+        setLine(board, obj, 8, "§a§r", ChatColor.YELLOW + "💰 " + ChatColor.WHITE + "Money: "   + ChatColor.GREEN + nf.format(money) + "g");
         setLine(board, obj, 7, "§b§r", ChatColor.AQUA   + "💎 " + ChatColor.WHITE + "Gems: "    + ChatColor.AQUA  + nf.format(gems));
         setLine(board, obj, 6, "§6§r", ChatColor.GOLD   + "⚔ "  + ChatColor.WHITE + "Credits: " + ChatColor.GOLD  + credits);
         setLine(board, obj, 5, "§e§r", ChatColor.WHITE  + "⏱ "  + ChatColor.WHITE + "Time: "    + ChatColor.GREEN + timePlayed);

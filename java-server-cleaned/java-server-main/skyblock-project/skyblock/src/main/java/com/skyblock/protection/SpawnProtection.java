@@ -19,14 +19,14 @@ import java.util.logging.Logger;
  * Players with the bypass tag ("sp_bypass") are exempt.
  *
  * Mine exception: the rectangular region defined by MINE_EXCEPTION is
- * inside the protected radius but allows block breaking/placing (it is
- * where the mine reset zone sits).
+ * inside the protected radius but allows block BREAKING only (mining).
+ * Placing blocks in the mine is still blocked.
  *
  * Constants match JS exactly:
  *   SPAWN_CENTER      = (0, 0)
  *   PROTECTION_RADIUS = 1000
  *   BYPASS_TAG        = "sp_bypass"
- *   Mine: x 255–293, y 150–199, z -19–19
+ *   Mine: x 255–293, y 150–205, z -19–19
  */
 public class SpawnProtection implements Listener {
 
@@ -41,7 +41,7 @@ public class SpawnProtection implements Listener {
 
     // Mine exception zone
     private static final double MINE_MIN_X = 255, MINE_MAX_X = 293;
-    private static final double MINE_MIN_Y = 150, MINE_MAX_Y = 199;
+    private static final double MINE_MIN_Y = 150, MINE_MAX_Y = 205;
     private static final double MINE_MIN_Z = -19, MINE_MAX_Z =  19;
 
     private final Logger logger;
@@ -62,32 +62,30 @@ public class SpawnProtection implements Listener {
     }
 
     private static boolean isInProtectedZone(Location loc) {
-        // Outside the protected radius → not protected
-        if (!(Math.abs(loc.getX() - SPAWN_CENTER_X) <= PROTECTION_RADIUS
-                && Math.abs(loc.getZ() - SPAWN_CENTER_Z) <= PROTECTION_RADIUS)) {
-            return false;
-        }
-        // Inside mine exception → not protected
-        if (isInMineException(loc)) return false;
-        return true;
+        return Math.abs(loc.getX() - SPAWN_CENTER_X) <= PROTECTION_RADIUS
+                && Math.abs(loc.getZ() - SPAWN_CENTER_Z) <= PROTECTION_RADIUS;
     }
 
     // ─── Events ───────────────────────────────────────────────────────────────
 
     /**
      * Mirrors world.beforeEvents.playerBreakBlock in spawn_protection.js.
+     * Mine exception applies here — players can mine in the mine zone.
      */
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
         Player player = event.getPlayer();
-        if (player.getScoreboardTags().contains(BYPASS_TAG)) return; // bypass is opt-in only, ops included
+        if (player.getScoreboardTags().contains(BYPASS_TAG)) return;
         if (!isInProtectedZone(event.getBlock().getLocation())) return;
+        // Mine exception: allow breaking inside the mine zone
+        if (isInMineException(event.getBlock().getLocation())) return;
         event.setCancelled(true);
         player.sendMessage("§cYou cannot break blocks here.");
     }
 
     /**
      * Mirrors world.afterEvents.playerPlaceBlock in spawn_protection.js.
+     * Mine exception does NOT apply here — placing is always blocked in the mine.
      * JS removed the placed block; here we cancel before placement.
      */
     @EventHandler

@@ -48,7 +48,7 @@ public class MineSystem implements CommandExecutor, Listener {
 
     // ─── Mine bounds ──────────────────────────────────────────────────────────
     private static final int MINE_MIN_X = 255, MINE_MAX_X = 293;
-    private static final int MINE_MIN_Y = 150, MINE_MAX_Y = 205;
+    private static final int MINE_MIN_Y = 150, MINE_MAX_Y = 199;
     private static final int MINE_MIN_Z = -19,  MINE_MAX_Z =  19;
 
     private static final int    MINE_TOTAL       = 39 * 50 * 39; // 76,050 blocks
@@ -701,6 +701,15 @@ public class MineSystem implements CommandExecutor, Listener {
     }
 
     // ─── Bounds checks ───────────────────────────────────────────────────────
+
+    /** Y ceiling extended to 205 so special picks (Aqua/Nova) work at the top of the mine structure. */
+    public boolean isInMineExtended(Location loc) {
+        int x = loc.getBlockX(), y = loc.getBlockY(), z = loc.getBlockZ();
+        return x >= MINE_MIN_X && x <= MINE_MAX_X
+            && y >= MINE_MIN_Y && y <= 205
+            && z >= MINE_MIN_Z && z <= MINE_MAX_Z;
+    }
+
     public boolean isInMine(Location loc) {
         return isInMineBounds(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
     }

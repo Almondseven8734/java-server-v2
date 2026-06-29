@@ -170,7 +170,7 @@ public class SpecialItems implements Listener {
             lastFired.put(player.getUniqueId(), now);
 
             // Mine-area restriction
-            if (mineSystem == null || !mineSystem.isInMine(player.getLocation())) {
+            if (mineSystem == null || !mineSystem.isInMineExtended(player.getLocation())) {
                 player.sendMessage("§c✖ The Aqua Pic can only be used inside the mine.");
                 return;
             }
@@ -205,7 +205,7 @@ public class SpecialItems implements Listener {
             lastFired.put(player.getUniqueId(), now);
 
             // Mine-area restriction
-            if (mineSystem == null || !mineSystem.isInMine(player.getLocation())) {
+            if (mineSystem == null || !mineSystem.isInMineExtended(player.getLocation())) {
                 player.sendMessage("§c✖ The Nova Pic can only be used inside the mine.");
                 return;
             }

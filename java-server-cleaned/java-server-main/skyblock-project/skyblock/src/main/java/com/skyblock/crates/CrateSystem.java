@@ -704,7 +704,15 @@ public class CrateSystem implements Listener {
         if (specialType.startsWith("money_")) {
             int amount = Integer.parseInt(specialType.replace("money_", ""));
             player.sendMessage("§aYou received §e" + amount + "g §afrom " + sourceName + "§a!");
-            player.performCommand("scoreboard players add " + player.getName() + " Money " + amount);
+            try {
+                org.bukkit.scoreboard.Scoreboard board = org.bukkit.Bukkit.getScoreboardManager().getMainScoreboard();
+                org.bukkit.scoreboard.Objective obj = board.getObjective("Money");
+                if (obj == null) obj = board.registerNewObjective("Money", "dummy", "§6Money");
+                org.bukkit.scoreboard.Score score = obj.getScore(player.getName());
+                score.setScore(score.isScoreSet() ? score.getScore() + amount : amount);
+            } catch (Exception e) {
+                log.warning("[CRATE] Failed to give money to " + player.getName() + ": " + e.getMessage());
+            }
             log.info("[CRATE] Gave " + player.getName() + " " + amount + "g");
 
         } else if (specialType.startsWith("exp_")) {

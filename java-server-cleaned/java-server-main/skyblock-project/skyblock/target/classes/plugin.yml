@@ -1,6 +1,6 @@
 name: Skyblock
 main: com.skyblock.SkyblockPlugin
-version: '1.0.0'
+version: '1.1.0'
 api-version: '1.21'
 author: YourName
 description: Custom Skyblock server plugin (translated from a Bedrock/JS script pack).
