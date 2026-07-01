@@ -174,11 +174,11 @@ public class SkyblockPlugin extends JavaPlugin {
         if (dungeonWorld == null) {
             getLogger().severe("[Dungeon] Failed to create/load the dungeon world - dungeon system disabled.");
         } else {
-            DungeonHubBuilder.buildHub(dungeonWorld, (int) floor1OriginX, (int) floor1OriginZ);
-            Location floor0Location = DungeonHubBuilder.entranceLocation(dungeonWorld, (int) floor1OriginX, (int) floor1OriginZ);
+            DungeonHubBuilder.buildHub(dungeonWorld, dungeonFloorBounds, (int) floor1OriginX, (int) floor1OriginZ);
+            Location floor0Location = DungeonHubBuilder.entranceLocation(dungeonWorld, dungeonFloorBounds, (int) floor1OriginX, (int) floor1OriginZ);
             Location spawnLocation = getServer().getWorlds().get(0).getSpawnLocation();
-            Location portalCorner1 = DungeonHubBuilder.portalCorner1(dungeonWorld, (int) floor1OriginX, (int) floor1OriginZ);
-            Location portalCorner2 = DungeonHubBuilder.portalCorner2(dungeonWorld, (int) floor1OriginX, (int) floor1OriginZ);
+            Location portalCorner1 = DungeonHubBuilder.portalCorner1(dungeonWorld, dungeonFloorBounds, (int) floor1OriginX, (int) floor1OriginZ);
+            Location portalCorner2 = DungeonHubBuilder.portalCorner2(dungeonWorld, dungeonFloorBounds, (int) floor1OriginX, (int) floor1OriginZ);
 
             DungeonPlayerStateStorage dungeonStateStorage = new DungeonPlayerStateStorage(getDataFolder(), getLogger());
             spawnCommand.setDungeonSkipCheck(p -> {
@@ -280,7 +280,7 @@ public class SkyblockPlugin extends JavaPlugin {
                 // from the hub builder so it stays correct if the hub layout
                 // ever changes, not hardcoded.
                 Location dungeonEntrance = DungeonHubBuilder.entranceLocation(
-                        finalDungeonWorld, (int) floor1OriginX, (int) floor1OriginZ);
+                        finalDungeonWorld, dungeonFloorBounds, (int) floor1OriginX, (int) floor1OriginZ);
                 adminPlayer.teleport(dungeonEntrance);
                 finalDungeonFloorManager.onPlayerFrontier(1, floor1OriginX, floor1OriginZ);
 

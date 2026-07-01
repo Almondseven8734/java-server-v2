@@ -12,6 +12,16 @@ public final class FloorBounds {
     /** Horizontal cap: terrain on a floor never generates beyond this distance from its origin. */
     public static final int GENERATION_RADIUS = 2000;
 
+    /**
+     * Thickness of the always-solid ring just inside GENERATION_RADIUS.
+     * Noise-driven cave carving is never allowed to open air within this
+     * band, so there's always a solid stone shell between the deepest
+     * carvable cave space and the void beyond the leash - otherwise a
+     * lucky cave-noise roll right at the edge could open straight into
+     * the void with nothing to stop a player walking out of the floor.
+     */
+    public static final int WALL_BAND_THICKNESS = 8;
+
     /** Height of a single floor's playable vertical space. */
     public static final int FLOOR_HEIGHT = 20;
 
@@ -26,6 +36,19 @@ public final class FloorBounds {
 
     /** Minimum separation required between two staircases generated on the same floor. */
     public static final int MIN_STAIRCASE_SEPARATION = 40;
+
+    /**
+     * Floor Y-layers kept solid as walkable ground (from floorBottomY
+     * upward). Must match DungeonRoomPlanner's carving pass - kept here
+     * as the single shared source of truth so anything placing an entity
+     * or block "on the floor" (mob spawner, chest placer, boss trigger)
+     * agrees with the carver on where solid ground actually ends and
+     * carvable cave space actually begins.
+     */
+    public static final int SOLID_FLOOR_LAYERS = 2;
+
+    /** Ceiling Y-layers kept solid (from floorTopY downward). */
+    public static final int SOLID_CEIL_LAYERS = 1;
 
     private final int worldMinY;
     private final int worldMaxY;
@@ -69,6 +92,17 @@ public final class FloorBounds {
     }
 
     /**
+     * The Y coordinate an entity/block should stand ON (i.e. the first
+     * carvable, potentially-air cave-band layer) for floor N - the solid
+     * floor itself occupies floorBottomY..floorBottomY+SOLID_FLOOR_LAYERS-1,
+     * so anything meant to stand on top of the ground belongs here, not at
+     * floorBottomY+1 (which is still inside the solid floor slab).
+     */
+    public int walkableFloorY(int floorNumber) {
+        return floorBottomY(floorNumber) + SOLID_FLOOR_LAYERS;
+    }
+
+    /**
      * Whether a given world Y coordinate falls within floor N's walkable
      * vertical band (excluding its border).
      */
@@ -101,6 +135,20 @@ public final class FloorBounds {
         double dx = x - originX;
         double dz = z - originZ;
         return (dx * dx + dz * dz) <= ((double) GENERATION_RADIUS * GENERATION_RADIUS);
+    }
+
+    /**
+     * Whether a horizontal point is within the "safe carve" radius - the
+     * generation radius minus WALL_BAND_THICKNESS. Cave carving must only
+     * open air inside this smaller radius, guaranteeing at least
+     * WALL_BAND_THICKNESS blocks of solid stone remain between any carved
+     * cave space and the void outside GENERATION_RADIUS.
+     */
+    public boolean isWithinCarveRadius(double originX, double originZ, double x, double z) {
+        double dx = x - originX;
+        double dz = z - originZ;
+        double safeRadius = GENERATION_RADIUS - WALL_BAND_THICKNESS;
+        return (dx * dx + dz * dz) <= (safeRadius * safeRadius);
     }
 
     /**

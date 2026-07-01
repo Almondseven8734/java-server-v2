@@ -30,6 +30,8 @@ public final class DungeonChestRoomPlacer {
 
     private static final int MIN_ITEMS = 2;
     private static final int MAX_ITEMS = 5;
+    /** Random tries at finding a verified-open column before falling back to a full scan. */
+    private static final int MAX_LOCATE_ATTEMPTS = 20;
 
     private final DungeonLootTable lootTable;
     private final Random random;
@@ -47,9 +49,24 @@ public final class DungeonChestRoomPlacer {
             return; // already emptied earlier this week - permanent scarcity, never refill
         }
 
-        int chestX = room.centerX();
-        int chestZ = room.centerZ();
-        Block block = world.getBlockAt(chestX, floorBottomY + 1, chestZ);
+        // groundY is the first carvable cave-band layer (on TOP of the solid
+        // floor slab), not floorBottomY+1 - that offset is still inside the
+        // solid floor itself and was the source of chests spawning embedded
+        // in the ground.
+        int groundY = floorBottomY + com.skyblock.dungeon.util.FloorBounds.SOLID_FLOOR_LAYERS;
+
+        // The room's centerX/centerZ is just the chunk's midpoint, with no
+        // guarantee the noise carver actually opened that exact column -
+        // roughly 60-65% of the time it's still solid stone. Search for a
+        // verified-open column instead of blindly placing at the center.
+        int[] spot = DungeonSpawnLocator.findOpenColumn(world, room, groundY, random, MAX_LOCATE_ATTEMPTS);
+        if (spot == null) {
+            return; // no verified-open column in this room (yet) - don't embed a chest in stone
+        }
+
+        int chestX = spot[0];
+        int chestZ = spot[1];
+        Block block = world.getBlockAt(chestX, groundY, chestZ);
         block.setType(Material.CHEST);
 
         if (!(block.getState() instanceof Chest chestState)) {

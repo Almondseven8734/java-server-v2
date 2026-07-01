@@ -21,16 +21,25 @@ import org.bukkit.World;
  * derived from Floor 1's origin passed into buildHub() rather than
  * hardcoded, so moving Floor 1's origin automatically moves the hub
  * with it.
+ *
+ * Vertically, the hub's floor sits at the SAME Y-band as Floor 1's own
+ * walkable floor (FloorBounds.walkableFloorY(1)), not an arbitrary fixed
+ * Y - it's derived from FloorBounds so the entrance always lands you
+ * adjacent to Floor 1, never accidentally lined up with some other
+ * floor deep in the stack.
  */
 public final class DungeonHubBuilder {
-
-    private static final int HUB_FLOOR_Y = 100;
 
     private static final int HUB_RADIUS_X = 8;
     private static final int HUB_RADIUS_Z = 8;
     private static final int HUB_HEIGHT = 5;
 
     private DungeonHubBuilder() {
+    }
+
+    /** Hub's floor Y - the same walkable band as Floor 1, so the two are vertically adjacent. */
+    private static int hubFloorY(FloorBounds floorBounds) {
+        return floorBounds.walkableFloorY(1);
     }
 
     /** Hub center sits FLOOR_0_TO_FLOOR_1_OFFSET blocks east (+X) of Floor 1's origin, same Z. */
@@ -43,14 +52,15 @@ public final class DungeonHubBuilder {
     }
 
     /** Builds the Floor 0 room: floor, walls, ceiling, and a portal block volume on the far wall. */
-    public static void buildHub(World world, int floor1OriginX, int floor1OriginZ) {
+    public static void buildHub(World world, FloorBounds floorBounds, int floor1OriginX, int floor1OriginZ) {
+        int hubFloorY = hubFloorY(floorBounds);
         int hubCenterX = hubCenterX(floor1OriginX);
         int hubCenterZ = hubCenterZ(floor1OriginZ);
 
         // Floor.
         for (int x = -HUB_RADIUS_X; x <= HUB_RADIUS_X; x++) {
             for (int z = -HUB_RADIUS_Z; z <= HUB_RADIUS_Z; z++) {
-                world.getBlockAt(hubCenterX + x, HUB_FLOOR_Y, hubCenterZ + z).setType(Material.SMOOTH_STONE);
+                world.getBlockAt(hubCenterX + x, hubFloorY, hubCenterZ + z).setType(Material.SMOOTH_STONE);
             }
         }
 
@@ -60,48 +70,49 @@ public final class DungeonHubBuilder {
                 boolean edge = Math.abs(x) == HUB_RADIUS_X || Math.abs(z) == HUB_RADIUS_Z;
                 for (int y = 1; y <= HUB_HEIGHT; y++) {
                     Material material = (edge || y == HUB_HEIGHT) ? Material.STONE_BRICKS : Material.AIR;
-                    world.getBlockAt(hubCenterX + x, HUB_FLOOR_Y + y, hubCenterZ + z).setType(material);
+                    world.getBlockAt(hubCenterX + x, hubFloorY + y, hubCenterZ + z).setType(material);
                 }
             }
         }
 
         // Portal volume: a 3x3 plane on the south wall (-Z side), distinct
-        // from the west-wall staircase. Decorative marker, not real portal
-        // physics - matches DungeonPortalHandler's portalCorner1/2 box.
+        // from the west-wall exit, decorative marker matching
+        // DungeonPortalHandler's portalCorner1/2 box.
         int portalX = hubCenterX;
         int portalZBase = hubCenterZ - HUB_RADIUS_Z + 1;
         for (int dx = -1; dx <= 1; dx++) {
             for (int dy = 1; dy <= 3; dy++) {
                 Material material = (dx == 0) ? Material.GLASS : Material.SEA_LANTERN;
-                world.getBlockAt(portalX + dx, HUB_FLOOR_Y + dy, portalZBase).setType(material);
+                world.getBlockAt(portalX + dx, hubFloorY + dy, portalZBase).setType(material);
             }
         }
 
-        // Staircase down to Floor 1's entrance, on the west wall (-X side),
-        // since the hub sits east of Floor 1's origin - walking out this
-        // exit heads straight toward Floor 1.
-        world.getBlockAt(hubCenterX - HUB_RADIUS_X + 1, HUB_FLOOR_Y, hubCenterZ).setType(Material.AIR);
-        for (int y = HUB_FLOOR_Y; y >= HUB_FLOOR_Y - 3; y--) {
-            world.getBlockAt(hubCenterX - HUB_RADIUS_X + 1, y, hubCenterZ).setType(Material.LADDER);
+        // Exit into Floor 1, on the west wall (-X side), since the hub sits
+        // east of Floor 1's origin - walking out this exit heads straight
+        // toward Floor 1. The hub's floor is already at Floor 1's own
+        // walkable Y-band, so this is a flat doorway (no ladder/descent
+        // needed) opening directly onto Floor 1's generated terrain.
+        for (int y = 1; y <= 2; y++) {
+            world.getBlockAt(hubCenterX - HUB_RADIUS_X, hubFloorY + y, hubCenterZ).setType(Material.AIR);
         }
     }
 
     /** The location players should be teleported to on /dungeon - just inside the hub room. */
-    public static Location entranceLocation(World world, int floor1OriginX, int floor1OriginZ) {
-        return new Location(world, hubCenterX(floor1OriginX), HUB_FLOOR_Y + 1, hubCenterZ(floor1OriginZ));
+    public static Location entranceLocation(World world, FloorBounds floorBounds, int floor1OriginX, int floor1OriginZ) {
+        return new Location(world, hubCenterX(floor1OriginX), hubFloorY(floorBounds) + 1, hubCenterZ(floor1OriginZ));
     }
 
     /** Corner 1 of the portal trigger volume, matching the visual marker built in buildHub(). */
-    public static Location portalCorner1(World world, int floor1OriginX, int floor1OriginZ) {
+    public static Location portalCorner1(World world, FloorBounds floorBounds, int floor1OriginX, int floor1OriginZ) {
         int hubCenterX = hubCenterX(floor1OriginX);
         int hubCenterZ = hubCenterZ(floor1OriginZ);
-        return new Location(world, hubCenterX - 1, HUB_FLOOR_Y + 1, hubCenterZ - HUB_RADIUS_Z + 2);
+        return new Location(world, hubCenterX - 1, hubFloorY(floorBounds) + 1, hubCenterZ - HUB_RADIUS_Z + 2);
     }
 
     /** Corner 2 of the portal trigger volume, matching the visual marker built in buildHub(). */
-    public static Location portalCorner2(World world, int floor1OriginX, int floor1OriginZ) {
+    public static Location portalCorner2(World world, FloorBounds floorBounds, int floor1OriginX, int floor1OriginZ) {
         int hubCenterX = hubCenterX(floor1OriginX);
         int hubCenterZ = hubCenterZ(floor1OriginZ);
-        return new Location(world, hubCenterX + 1, HUB_FLOOR_Y + 3, hubCenterZ - HUB_RADIUS_Z + 1);
+        return new Location(world, hubCenterX + 1, hubFloorY(floorBounds) + 3, hubCenterZ - HUB_RADIUS_Z + 1);
     }
 }

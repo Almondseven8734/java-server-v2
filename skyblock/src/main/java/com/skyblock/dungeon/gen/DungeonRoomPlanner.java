@@ -53,9 +53,9 @@ public final class DungeonRoomPlanner {
     private static final double FREQ_Y  = 0.075;
 
     /** Floor Y-layers kept solid as walkable ground (from floorBottomY upward). */
-    private static final int SOLID_FLOOR_LAYERS = 2;
+    private static final int SOLID_FLOOR_LAYERS = FloorBounds.SOLID_FLOOR_LAYERS;
     /** Ceiling Y-layers kept solid (from floorTopY downward). */
-    private static final int SOLID_CEIL_LAYERS  = 1;
+    private static final int SOLID_CEIL_LAYERS  = FloorBounds.SOLID_CEIL_LAYERS;
 
     @FunctionalInterface
     public interface RoomCarveListener {
@@ -189,14 +189,21 @@ public final class DungeonRoomPlanner {
                     world.getBlockAt(wx, y, wz).setType(m, false);
                 }
 
-                // Cave band — noise-driven.
+                // Cave band — noise-driven, but never carved outside the
+                // safe-carve radius: that leaves a solid WALL_BAND_THICKNESS
+                // ring of stone right at the edge of the generation leash so
+                // players can never carve/walk straight out into the void.
+                boolean withinSafeCarveRadius = floorBounds.isWithinCarveRadius(originX, originZ, wx, wz);
                 for (int y = caveMinY; y <= caveMaxY; y++) {
-                    double n = noise.sample(wx * FREQ_XZ, y * FREQ_Y, wz * FREQ_XZ);
-                    if (n < CAVE_THRESHOLD) {
-                        world.getBlockAt(wx, y, wz).setType(Material.AIR, false);
-                        anyOpen = true;
+                    if (withinSafeCarveRadius) {
+                        double n = noise.sample(wx * FREQ_XZ, y * FREQ_Y, wz * FREQ_XZ);
+                        if (n < CAVE_THRESHOLD) {
+                            world.getBlockAt(wx, y, wz).setType(Material.AIR, false);
+                            anyOpen = true;
+                        }
+                        // else: leave as stone (already placed by StoneBufferGenerator)
                     }
-                    // else: leave as stone (already placed by StoneBufferGenerator)
+                    // else: inside the wall band - always leave solid, regardless of noise.
                 }
 
                 // Ceiling layer — always solid (stone, unchanged from buffer).

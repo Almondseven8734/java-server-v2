@@ -1,5 +1,6 @@
 package com.skyblock.dungeon.listener;
 
+import com.skyblock.admin.AdminSystem;
 import com.skyblock.dungeon.floor.DungeonPlayerState;
 import com.skyblock.dungeon.util.DungeonCommandLockdown;
 import org.bukkit.ChatColor;
@@ -17,6 +18,11 @@ import java.util.function.Function;
  * blocked command (movement/escape-hatch commands like /tpa, /hub,
  * /mine, /fly, etc.) while the player is physically inside the
  * dungeon. All other commands pass through untouched, per design.
+ *
+ * Admins with the COMMAND_OVERRIDE permission can bypass this entirely
+ * via "/admin execute <command>" - that flow flags the acting player as
+ * override-active for the duration of the dispatch, which this listener
+ * checks below.
  */
 public final class DungeonCommandLockdownListener implements Listener {
 
@@ -29,6 +35,11 @@ public final class DungeonCommandLockdownListener implements Listener {
     @EventHandler
     public void onCommandPreprocess(PlayerCommandPreprocessEvent event) {
         Player player = event.getPlayer();
+
+        if (AdminSystem.isOverrideActive(player.getUniqueId())) {
+            return; // admin command override in progress - bypass lockdown entirely
+        }
+
         DungeonPlayerState state = stateLookup.apply(player.getUniqueId());
 
         if (state == null || !state.isInsideDungeon()) {

@@ -27,6 +27,8 @@ public final class DungeonRoomMobSpawner {
     private static final int BLOCKS_PER_MOB = 18;
     private static final int MIN_MOBS_PER_ROOM = 1;
     private static final int MAX_MOBS_PER_ROOM = 6;
+    /** Random tries at finding a verified-open column before falling back to a full scan. */
+    private static final int MAX_LOCATE_ATTEMPTS = 12;
 
     private final FloorThemeRegistry themeRegistry;
     private final MobBuffApplicator buffApplicator;
@@ -49,18 +51,28 @@ public final class DungeonRoomMobSpawner {
             return;
         }
 
+        // groundY is the first carvable cave-band layer (on TOP of the solid
+        // floor slab), not floorBottomY+1 - that offset is still inside the
+        // solid floor itself and was the source of mobs spawning embedded
+        // in the ground.
+        int groundY = floorBottomY + com.skyblock.dungeon.util.FloorBounds.SOLID_FLOOR_LAYERS;
+
         int footprintArea = (room.radiusX() * 2 + 1) * (room.radiusZ() * 2 + 1);
         int mobCount = Math.min(MAX_MOBS_PER_ROOM,
                 Math.max(MIN_MOBS_PER_ROOM, footprintArea / BLOCKS_PER_MOB));
 
         for (int i = 0; i < mobCount; i++) {
-            int dx = random.nextInt(room.radiusX() * 2 + 1) - room.radiusX();
-            int dz = random.nextInt(room.radiusZ() * 2 + 1) - room.radiusZ();
-            int x = room.centerX() + dx;
-            int z = room.centerZ() + dz;
+            // The room's radiusX/radiusZ describe a bounding box for graph
+            // bookkeeping, not the real carved cave shape - only ~35-40% of
+            // that box is actually open. Verify a real spot rather than
+            // trusting the box, or mobs end up embedded in stone walls/floor.
+            int[] spot = DungeonSpawnLocator.findOpenColumn(world, room, groundY, random, MAX_LOCATE_ATTEMPTS);
+            if (spot == null) {
+                continue; // this room has no verified-open column (yet) - skip this mob rather than embed it
+            }
 
             EntityType type = mobPool.get(random.nextInt(mobPool.size()));
-            Location spawnLoc = new Location(world, x + 0.5, floorBottomY + 1, z + 0.5);
+            Location spawnLoc = new Location(world, spot[0] + 0.5, groundY, spot[1] + 0.5);
 
             if (!(world.spawnEntity(spawnLoc, type) instanceof LivingEntity entity)) {
                 continue;

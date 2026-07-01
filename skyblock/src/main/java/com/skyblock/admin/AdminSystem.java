@@ -73,7 +73,8 @@ public class AdminSystem implements CommandExecutor, Listener {
         KICK_PLAYERS         ("Kick Players",              Material.IRON_DOOR),
         TIMEOUT_PLAYERS      ("Timeout Players",           Material.CLOCK),
         ISLAND_BLOCK_BYPASS  ("Island Block Bypass",       Material.DIAMOND_PICKAXE),
-        ISLAND_BORDER_BYPASS ("Island Border Bypass",      Material.COMPASS);
+        ISLAND_BORDER_BYPASS ("Island Border Bypass",      Material.COMPASS),
+        COMMAND_OVERRIDE     ("Command Override",          Material.NETHER_STAR);
 
         public final String label;
         public final Material icon;
@@ -94,6 +95,14 @@ public class AdminSystem implements CommandExecutor, Listener {
     private final Map<String, Long>                timeouts     = new HashMap<>();
     /** Players queued for strip on next join (removed while offline). */
     private final Set<String>                      queuedStrip  = new HashSet<>();
+    /**
+     * UUIDs of admins currently mid-dispatch of a "/admin execute" command.
+     * Other restriction listeners (e.g. DungeonCommandLockdownListener) can
+     * check {@link #isOverrideActive(UUID)} to skip their own cancellation
+     * logic for the single command being force-executed. Membership is only
+     * ever held for the duration of the dispatch call itself.
+     */
+    private final Set<UUID>                         commandOverrideActive = new HashSet<>();
 
     private static AdminSystem INSTANCE;
 
@@ -114,7 +123,7 @@ public class AdminSystem implements CommandExecutor, Listener {
 
     // Permission toggle slots (in the PLAYER_MANAGE sub-menu, 54-slot chest)
     // Each AdminPerm gets a dedicated slot.
-    private static final int[] PERM_SLOTS = { 10, 11, 12, 13, 14, 15, 19, 20 };
+    private static final int[] PERM_SLOTS = { 10, 11, 12, 13, 14, 15, 19, 20, 21 };
 
     // ─── Chat-input state ─────────────────────────────────────────────────────
     private enum InputMode { NONE, ADD_WHITELIST, ADD_BLACKLIST }
@@ -172,6 +181,17 @@ public class AdminSystem implements CommandExecutor, Listener {
         Set<String> perms = INSTANCE.permissions.get(name.toLowerCase());
         if (perms == null) return false;
         return perms.contains(perm.name());
+    }
+
+    /**
+     * True while the given player is mid-dispatch of a "/admin execute"
+     * command. Other restriction listeners (dungeon command lockdown,
+     * region protections, etc.) should skip their own cancellation logic
+     * when this returns true for the acting player, so that COMMAND_OVERRIDE
+     * genuinely bypasses every command-level restriction, not just this one.
+     */
+    public static boolean isOverrideActive(UUID uuid) {
+        return INSTANCE != null && uuid != null && INSTANCE.commandOverrideActive.contains(uuid);
     }
 
     public static boolean isTimedOut(String name) {
@@ -480,6 +500,35 @@ public class AdminSystem implements CommandExecutor, Listener {
                 break;
             }
 
+            case "execute": {
+                if (!hasPerm(player.getName(), AdminPerm.COMMAND_OVERRIDE)) {
+                    player.sendMessage("§c[Admin] No permission."); break;
+                }
+                if (args.length < 2) { player.sendMessage("§7Usage: /admin execute <command>"); break; }
+                String rawCommand = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
+                String toRun = rawCommand.startsWith("/") ? rawCommand.substring(1) : rawCommand;
+
+                UUID uuid = player.getUniqueId();
+                commandOverrideActive.add(uuid);
+                boolean dispatched;
+                try {
+                    // performCommand() (unlike typing in chat) never fires
+                    // PlayerCommandPreprocessEvent, and the commandOverrideActive
+                    // flag lets any listener that checks it (dungeon lockdown,
+                    // region guards, etc.) skip its own restriction too - so this
+                    // genuinely runs as the player, with every command-level
+                    // restriction bypassed, rather than just working around one.
+                    dispatched = player.performCommand(toRun);
+                } finally {
+                    commandOverrideActive.remove(uuid);
+                }
+
+                player.sendMessage((dispatched ? "§a[Admin] Executed: §f/" : "§c[Admin] Command failed or not found: §f/") + toRun);
+                logger.warning("[Admin] " + player.getName() + " used command override to run: /" + toRun);
+                plugin.getServer().broadcastMessage("§c[Admin] " + player.getName() + " used a command override.");
+                break;
+            }
+
             case "whitelist": {
                 if (!player.getName().equalsIgnoreCase(OWNER_NAME)) {
                     player.sendMessage("§c[Admin] Only the owner can manage the whitelist."); break;
@@ -537,6 +586,8 @@ public class AdminSystem implements CommandExecutor, Listener {
             player.sendMessage("§e/admin kick <player> [reason] §7— Kick a player");
         if (hasPerm(player.getName(), AdminPerm.TIMEOUT_PLAYERS))
             player.sendMessage("§e/admin timeout <player> <mins> [reason] §7— Temp ban");
+        if (hasPerm(player.getName(), AdminPerm.COMMAND_OVERRIDE))
+            player.sendMessage("§e/admin execute <command> §7— Run a command bypassing all restrictions");
         if (isOwner) {
             player.sendMessage("§e/admin whitelist §7— View/manage whitelist");
             player.sendMessage("§e/admin blacklist §7— View/manage blacklist");

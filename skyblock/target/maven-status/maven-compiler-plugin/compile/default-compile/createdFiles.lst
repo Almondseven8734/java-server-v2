@@ -116,6 +116,7 @@ com/skyblock/crates/CrateSystem$LootEntry.class
 com/skyblock/commands/BalCommand.class
 com/skyblock/crates/CrateSystem.class
 com/skyblock/ah/AhStorage$Listing.class
+com/skyblock/dungeon/spawn/DungeonSpawnLocator.class
 com/skyblock/shop/AdminShopSystem$MenuType.class
 com/skyblock/util/GuiBuilder$GuiListener$2.class
 com/skyblock/vault/VaultSystem.class

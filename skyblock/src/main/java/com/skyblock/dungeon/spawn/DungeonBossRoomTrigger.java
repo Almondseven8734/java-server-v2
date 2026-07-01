@@ -41,6 +41,8 @@ public final class DungeonBossRoomTrigger {
 
     /** How often (in ticks) a spawned MilestoneBoss's update() is driven. 20 ticks = 1 second. */
     private static final long MILESTONE_BOSS_TICK_PERIOD = 10L;
+    /** Random tries at finding a verified-open column before falling back to a full scan. */
+    private static final int MAX_LOCATE_ATTEMPTS = 20;
 
     private final JavaPlugin plugin;
     private final FloorThemeRegistry themeRegistry;
@@ -97,6 +99,9 @@ public final class DungeonBossRoomTrigger {
 
         for (int i = 0; i < bossCount; i++) {
             Location spawnLoc = randomPointInRoom(world, bossRoom, floorBottomY);
+            if (spawnLoc == null) {
+                continue; // no verified-open column in this boss room (yet) - skip rather than embed the boss
+            }
             EntityType type = pickBossEntityType(theme);
 
             if (!(world.spawnEntity(spawnLoc, type) instanceof LivingEntity entity)) {
@@ -123,9 +128,18 @@ public final class DungeonBossRoomTrigger {
         return pool.get(pool.size() - 1);
     }
 
+    /**
+     * Finds a verified-open, standable column within the boss room rather
+     * than trusting its bounding box - the room's radius describes graph
+     * bookkeeping, not the real noise-carved cave shape, so a blind
+     * center-ish pick regularly landed the boss inside solid stone.
+     */
     private Location randomPointInRoom(World world, DungeonRoom room, int floorBottomY) {
-        int dx = random.nextInt(Math.max(1, room.radiusX() * 2 - 1)) - (room.radiusX() - 1);
-        int dz = random.nextInt(Math.max(1, room.radiusZ() * 2 - 1)) - (room.radiusZ() - 1);
-        return new Location(world, room.centerX() + dx + 0.5, floorBottomY + 1, room.centerZ() + dz + 0.5);
+        int groundY = floorBottomY + com.skyblock.dungeon.util.FloorBounds.SOLID_FLOOR_LAYERS;
+        int[] spot = DungeonSpawnLocator.findOpenColumn(world, room, groundY, random, MAX_LOCATE_ATTEMPTS);
+        if (spot == null) {
+            return null;
+        }
+        return new Location(world, spot[0] + 0.5, groundY, spot[1] + 0.5);
     }
 }
