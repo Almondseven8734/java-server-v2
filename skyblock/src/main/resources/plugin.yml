@@ -42,12 +42,10 @@ commands:
   minigames:
     description: Transfer to the minigames server
     usage: /minigames
-  dungeons:
-    description: Information about the dungeons
-    usage: /dungeons
   dungeon:
-    description: Enter the dungeon (Floor 0 entrance hub)
-    usage: /dungeon
+    description: Enter the dungeon (Floor 0 entrance hub), or run admin subcommands
+    usage: /dungeon [reset]
+    aliases: [dungeons]
   pvp:
     description: Teleport to the PvP arena
     usage: /pvp

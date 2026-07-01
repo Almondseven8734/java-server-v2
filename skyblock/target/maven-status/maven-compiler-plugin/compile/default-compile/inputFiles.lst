@@ -34,6 +34,7 @@
 /workspaces/java-server-v2/skyblock/src/main/java/com/skyblock/dungeon/gen/DungeonWorldGenerator.java
 /workspaces/java-server-v2/skyblock/src/main/java/com/skyblock/dungeon/gen/RoomGraph.java
 /workspaces/java-server-v2/skyblock/src/main/java/com/skyblock/dungeon/gen/StoneBufferGenerator.java
+/workspaces/java-server-v2/skyblock/src/main/java/com/skyblock/dungeon/listener/DungeonBlockProtectionListener.java
 /workspaces/java-server-v2/skyblock/src/main/java/com/skyblock/dungeon/listener/DungeonChestLootListener.java
 /workspaces/java-server-v2/skyblock/src/main/java/com/skyblock/dungeon/listener/DungeonCommandLockdownListener.java
 /workspaces/java-server-v2/skyblock/src/main/java/com/skyblock/dungeon/listener/DungeonDeathHandler.java

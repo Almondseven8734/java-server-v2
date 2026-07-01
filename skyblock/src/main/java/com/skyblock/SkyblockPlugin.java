@@ -52,6 +52,7 @@ import com.skyblock.dungeon.floor.DungeonPlayerStateStorage;
 import com.skyblock.dungeon.floor.DungeonResetScheduler;
 import com.skyblock.dungeon.floor.DungeonStaircaseOrchestrator;
 import com.skyblock.dungeon.gen.DungeonWorldGenerator;
+import com.skyblock.dungeon.listener.DungeonBlockProtectionListener;
 import com.skyblock.dungeon.listener.DungeonChestLootListener;
 import com.skyblock.dungeon.listener.DungeonCommandLockdownListener;
 import com.skyblock.dungeon.listener.DungeonDeathHandler;
@@ -223,7 +224,19 @@ public class SkyblockPlugin extends JavaPlugin {
                 dungeonChestPlacer.placeForRoom(world, floorNumber, floorBottomY, room);
             });
 
-            DungeonCommand dungeonCommand = new DungeonCommand(dungeonStateStorage::get, floor0Location);
+            // Built before DungeonCommand since /dungeon reset needs it -
+            // moved up from where it's started further down.
+            DungeonResetScheduler dungeonResetSchedulerLocal = new DungeonResetScheduler(
+                this, dungeonFloorManager, "dungeon",
+                () -> new DungeonWorldGenerator(dungeonFloorBounds, floor1OriginX, floor1OriginZ),
+                () -> getServer().getWorlds().get(0).getSpawnLocation(),
+                getLogger()
+            );
+
+            DungeonCommand dungeonCommand =
+                new DungeonCommand(dungeonStateStorage::get, floor0Location, dungeonResetSchedulerLocal);
+            DungeonBlockProtectionListener dungeonBlockProtectionListener =
+                new DungeonBlockProtectionListener(dungeonWorld);
             DungeonDeathHandler dungeonDeathHandler =
                 new DungeonDeathHandler(this, dungeonStateStorage::get, spawnLocation, getLogger());
             DungeonPortalHandler dungeonPortalHandler = new DungeonPortalHandler(
@@ -244,12 +257,35 @@ public class SkyblockPlugin extends JavaPlugin {
                 dungeonFloorBounds::floorForY
             );
 
-            DungeonResetScheduler dungeonResetSchedulerLocal = new DungeonResetScheduler(
-                this, dungeonFloorManager, "dungeon",
-                () -> new DungeonWorldGenerator(dungeonFloorBounds, floor1OriginX, floor1OriginZ),
-                () -> getServer().getWorlds().get(0).getSpawnLocation(),
-                getLogger()
-            );
+            dungeonResetSchedulerLocal.setOnPlayerEjected(ejectedPlayer -> {
+                DungeonPlayerState ejectedState = dungeonStateStorage.get(ejectedPlayer.getUniqueId());
+                if (ejectedState != null) {
+                    ejectedState.clearDungeonState();
+                    dungeonStateStorage.persist(ejectedPlayer.getUniqueId(), ejectedState);
+                }
+            });
+
+            // Rebuilds everything that's tied to a specific dungeon World
+            // instance once DungeonResetScheduler deletes and recreates it.
+            // Order matters: floorManager.setDungeonWorld() already happened
+            // inside the scheduler before this fires, so generation is safe
+            // to trigger by the time buildHub runs.
+            dungeonResetSchedulerLocal.setOnWorldRecreated(newWorld -> {
+                DungeonHubBuilder.buildHub(newWorld, dungeonFloorBounds, (int) floor1OriginX, (int) floor1OriginZ);
+                Location newFloor0Location = DungeonHubBuilder.entranceLocation(
+                        newWorld, dungeonFloorBounds, (int) floor1OriginX, (int) floor1OriginZ);
+                Location newPortalCorner1 = DungeonHubBuilder.portalCorner1(
+                        newWorld, dungeonFloorBounds, (int) floor1OriginX, (int) floor1OriginZ);
+                Location newPortalCorner2 = DungeonHubBuilder.portalCorner2(
+                        newWorld, dungeonFloorBounds, (int) floor1OriginX, (int) floor1OriginZ);
+
+                dungeonCommand.setFloor0Location(newFloor0Location);
+                dungeonPortalHandler.updatePortalBounds(newPortalCorner1, newPortalCorner2);
+                dungeonBlockProtectionListener.setDungeonWorld(newWorld);
+
+                getLogger().info("[Dungeon] Hub rebuilt and entrance/portal/protection repointed at the new world.");
+            });
+
             dungeonResetSchedulerLocal.start();
             this.dungeonResetScheduler = dungeonResetSchedulerLocal;
 
@@ -262,6 +298,7 @@ public class SkyblockPlugin extends JavaPlugin {
             pm.registerEvents(dungeonStaircaseOrchestrator, this);
             pm.registerEvents(dungeonFrontierListener, this);
             pm.registerEvents(dungeonChestLootListener, this);
+            pm.registerEvents(dungeonBlockProtectionListener, this);
 
             // ── Admin dungeon controls ──────────────────────────────────────
             // "/admin dungeon start": kicks off generation at the Floor 1
@@ -269,7 +306,12 @@ public class SkyblockPlugin extends JavaPlugin {
             // once a real player walks there) and teleports the admin
             // straight to it, marking them as inside the dungeon so the
             // lockdown/death/portal listeners apply normally.
-            World finalDungeonWorld = dungeonWorld;
+            //
+            // Reads the world from finalDungeonFloorManager.dungeonWorld()
+            // rather than capturing the World instance directly, since
+            // that's kept up to date across resets (setDungeonWorld) - a
+            // captured World local here would go stale exactly like
+            // floor0Location/portalCorner1/2 did before those got setters.
             DungeonFloorManager finalDungeonFloorManager = dungeonFloorManager;
             adminSystem.setDungeonAdminHandler(adminPlayer -> {
                 DungeonPlayerState adminState = dungeonStateStorage.get(adminPlayer.getUniqueId());
@@ -280,7 +322,7 @@ public class SkyblockPlugin extends JavaPlugin {
                 // from the hub builder so it stays correct if the hub layout
                 // ever changes, not hardcoded.
                 Location dungeonEntrance = DungeonHubBuilder.entranceLocation(
-                        finalDungeonWorld, dungeonFloorBounds, (int) floor1OriginX, (int) floor1OriginZ);
+                        finalDungeonFloorManager.dungeonWorld(), dungeonFloorBounds, (int) floor1OriginX, (int) floor1OriginZ);
                 adminPlayer.teleport(dungeonEntrance);
                 finalDungeonFloorManager.onPlayerFrontier(1, floor1OriginX, floor1OriginZ);
 
@@ -299,7 +341,6 @@ public class SkyblockPlugin extends JavaPlugin {
         getCommand("mine").setExecutor(teleportCommands);
         getCommand("resetmine").setExecutor(mineSystem);
         getCommand("minigames").setExecutor(minigamesSystem);
-        getCommand("dungeons").setExecutor(teleportCommands);
         getCommand("pvp").setExecutor(teleportCommands);
         getCommand("pay").setExecutor(payCommand);
         getCommand("pwarp").setExecutor(pwarpSystem);

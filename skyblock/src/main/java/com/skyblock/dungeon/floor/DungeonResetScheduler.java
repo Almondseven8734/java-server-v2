@@ -7,6 +7,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 /**
@@ -35,6 +36,32 @@ public final class DungeonResetScheduler {
     private int taskId = -1;
 
     /**
+     * Fired with the brand-new World instance once a reset finishes
+     * recreating it. DungeonFloorManager.dungeonWorld is repointed
+     * automatically before this fires (see performReset), but every
+     * other component that cached a Location/World tied to the old
+     * dungeon world (the entrance, the portal bounds, the block
+     * protection listener) needs the same treatment, and only the
+     * caller (SkyblockPlugin) knows about all of them - hence the
+     * callback rather than this class reaching into unrelated systems.
+     */
+    private Consumer<World> onWorldRecreated = w -> { };
+
+    /**
+     * Fired once per player as they're ejected to spawn during a reset,
+     * right after their teleport. performReset() only ever moved the
+     * player's physical body - it never touched their persisted
+     * DungeonPlayerState (isInsideDungeon flag + last coordinates). If a
+     * player logs out any time before walking through the portal again,
+     * DungeonJoinQuitListener trusts that stale persisted state and force-
+     * teleports them straight back into the dungeon world at their old
+     * coordinates on rejoin - coordinates that, post-reset, sit inside
+     * solid unstructured stone. Wire this to clear + persist each
+     * ejected player's dungeon state the same way the portal exit does.
+     */
+    private Consumer<Player> onPlayerEjected = p -> { };
+
+    /**
      * Builds the world's chunk generator fresh each reset (a new
      * StoneBufferGenerator instance bound to Floor 1's origin) - supplied
      * as a factory rather than a single instance since ChunkGenerator
@@ -57,6 +84,21 @@ public final class DungeonResetScheduler {
         this.logger = logger;
     }
 
+    /**
+     * Registers a callback invoked with the freshly recreated dungeon
+     * World right after a reset completes. Set this once during plugin
+     * wiring, before start() or any manual performReset() call (e.g.
+     * via /dungeon reset).
+     */
+    public void setOnWorldRecreated(Consumer<World> onWorldRecreated) {
+        this.onWorldRecreated = onWorldRecreated != null ? onWorldRecreated : (w -> { });
+    }
+
+    /** Registers a callback fired for each player ejected to spawn during a reset. */
+    public void setOnPlayerEjected(Consumer<Player> onPlayerEjected) {
+        this.onPlayerEjected = onPlayerEjected != null ? onPlayerEjected : (p -> { });
+    }
+
     /** Schedules the recurring weekly reset. Safe to call once at plugin startup. */
     public void start() {
         if (taskId != -1) {
@@ -76,7 +118,21 @@ public final class DungeonResetScheduler {
         }
     }
 
-    /** Forces an immediate reset, e.g. via an admin command, outside the normal weekly schedule. */
+    /**
+     * Forces an immediate reset, e.g. via an admin command, outside the
+     * normal weekly schedule.
+     *
+     * The actual unload/delete/recreate is deferred one tick after the
+     * ejection teleports: Bukkit.unloadWorld() refuses to unload a world
+     * that still has players in it, and a same-tick check right after
+     * calling player.teleport() across worlds isn't guaranteed to see
+     * the transfer as fully complete yet. Without the delay, unloadWorld
+     * can spuriously return false, silently aborting the whole reset
+     * (world never deleted, floor state already wiped) - which looks
+     * exactly like "the reset didn't work" from the console/logs and,
+     * on the next server restart, the untouched old world simply
+     * reloads as if nothing happened.
+     */
     public void performReset() {
         logger.info("[Dungeon] Starting weekly dungeon reset...");
 
@@ -88,15 +144,22 @@ public final class DungeonResetScheduler {
         for (Player player : oldWorld.getPlayers()) {
             player.teleport(spawnLoc);
             player.sendMessage("§6The dungeon is resetting for the week - you've been returned to spawn.");
+            onPlayerEjected.accept(player);
         }
 
         floorManager.resetAll();
 
+        Bukkit.getScheduler().runTask(plugin, () -> finishReset(oldWorld));
+    }
+
+    private void finishReset(World oldWorld) {
         String worldName = oldWorld.getName();
         boolean unloaded = Bukkit.unloadWorld(oldWorld, false);
         if (!unloaded) {
             logger.warning("[Dungeon] Failed to unload dungeon world '" + worldName + "' - reset aborted, "
-                    + "in-memory floor state was already cleared but the old world is still active.");
+                    + "in-memory floor state was already cleared but the old world is still active. "
+                    + "This usually means a player (or entity holding a reference) is still in the world - "
+                    + "check for anyone who reconnected mid-reset.");
             return;
         }
 
@@ -113,6 +176,13 @@ public final class DungeonResetScheduler {
             logger.severe("[Dungeon] Failed to recreate dungeon world '" + worldName + "' after reset!");
             return;
         }
+
+        // Repoint the floor manager at the new World instance before
+        // anything else can touch it - onWorldRecreated below may
+        // immediately rebuild the hub, and generation could start
+        // firing the moment a player reconnects.
+        floorManager.setDungeonWorld(freshWorld);
+        onWorldRecreated.accept(freshWorld);
 
         logger.info("[Dungeon] Weekly dungeon reset complete - world '" + worldName + "' regenerated.");
     }

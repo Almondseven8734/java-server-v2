@@ -318,6 +318,8 @@ public class AdminSystem implements CommandExecutor, Listener {
     }
 
     // ─── Spawn bypass toggle ──────────────────────────────────────────────────
+    // Also covers dungeon block protection (DungeonBlockProtectionListener)
+    // since both share SpawnProtection.BYPASS_TAG - one toggle, two zones.
 
     public void toggleSpawnBypass(Player player) {
         if (!hasPerm(player.getName(), AdminPerm.SPAWN_BYPASS)) {
@@ -326,10 +328,10 @@ public class AdminSystem implements CommandExecutor, Listener {
         }
         if (player.getScoreboardTags().contains(SpawnProtection.BYPASS_TAG)) {
             player.removeScoreboardTag(SpawnProtection.BYPASS_TAG);
-            player.sendMessage("§c[Spawn Protection] Build bypass OFF.");
+            player.sendMessage("§c[Spawn Protection] Build bypass OFF (spawn + dungeon).");
         } else {
             player.addScoreboardTag(SpawnProtection.BYPASS_TAG);
-            player.sendMessage("§a[Spawn Protection] Build bypass ON.");
+            player.sendMessage("§a[Spawn Protection] Build bypass ON (spawn + dungeon).");
         }
     }
 

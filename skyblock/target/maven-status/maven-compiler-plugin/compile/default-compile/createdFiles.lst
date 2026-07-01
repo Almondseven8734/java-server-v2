@@ -99,6 +99,7 @@ com/skyblock/ah/AhSystem.class
 com/skyblock/admin/AdminSystem$DungeonAdminHandler.class
 com/skyblock/dungeon/floor/StaircasePlacementValidator$RoomContainmentCheck.class
 com/skyblock/crates/CrateSystem$SelectedReward.class
+com/skyblock/dungeon/listener/DungeonBlockProtectionListener.class
 com/skyblock/commands/TeleportCommands.class
 com/skyblock/vault/VaultStorage$1.class
 com/skyblock/dungeon/listener/DungeonChestLootListener.class

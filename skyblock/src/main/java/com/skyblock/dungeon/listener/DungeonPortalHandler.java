@@ -19,20 +19,27 @@ import java.util.logging.Logger;
  * The portal region itself is a simple axis-aligned bounding box for
  * now (min/max corners) - swap for a more elaborate trigger volume
  * later if needed without changing the listener's public surface.
+ *
+ * The dungeon world is deleted and recreated as a brand-new World
+ * object on every DungeonResetScheduler reset, which also moves the
+ * physical portal (the hub gets rebuilt from scratch). Call
+ * updatePortalBounds(...) with the fresh world/corners right after a
+ * reset, or this listener keeps comparing against stale, unloaded
+ * Location data and the portal effectively stops working.
  */
 public final class DungeonPortalHandler implements Listener {
 
     private final Function<UUID, DungeonPlayerState> stateLookup;
     private final Location spawnLocation;
     private final Logger logger;
-    private final org.bukkit.World dungeonWorld;
+    private org.bukkit.World dungeonWorld;
 
-    private final double minX;
-    private final double minY;
-    private final double minZ;
-    private final double maxX;
-    private final double maxY;
-    private final double maxZ;
+    private double minX;
+    private double minY;
+    private double minZ;
+    private double maxX;
+    private double maxY;
+    private double maxZ;
 
     public DungeonPortalHandler(Function<UUID, DungeonPlayerState> stateLookup,
                                  Location spawnLocation,
@@ -42,6 +49,11 @@ public final class DungeonPortalHandler implements Listener {
         this.stateLookup = stateLookup;
         this.spawnLocation = spawnLocation;
         this.logger = logger;
+        updatePortalBounds(portalCorner1, portalCorner2);
+    }
+
+    /** Repoints the portal's world and bounding box at freshly (re)built hub corners after a reset. */
+    public void updatePortalBounds(Location portalCorner1, Location portalCorner2) {
         this.dungeonWorld = portalCorner1.getWorld();
 
         this.minX = Math.min(portalCorner1.getX(), portalCorner2.getX());

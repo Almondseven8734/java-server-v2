@@ -34,7 +34,7 @@ import java.util.logging.Logger;
  */
 public final class DungeonFloorManager {
 
-    private final World dungeonWorld;
+    private World dungeonWorld;
     private final FloorBounds floorBounds;
     private final FloorThemeRegistry themeRegistry;
     private final BossKillTracker bossKillTracker = new BossKillTracker();
@@ -173,6 +173,20 @@ public final class DungeonFloorManager {
 
     public World dungeonWorld() {
         return dungeonWorld;
+    }
+
+    /**
+     * Repoints this manager at a freshly (re)created dungeon World.
+     * dungeonWorld was a `final` field before this fix - after
+     * DungeonResetScheduler unloaded/deleted/recreated the world during
+     * a reset, Bukkit hands back a brand-new World object (same name,
+     * different instance), but every carve/frontier call in this class
+     * kept using the old, now-unloaded World reference forever, silently
+     * no-oping on block edits. Call this right after the reset creates
+     * the new World, before any player can trigger generation again.
+     */
+    public void setDungeonWorld(World dungeonWorld) {
+        this.dungeonWorld = dungeonWorld;
     }
 
     // ─── Frontier-driven generation ─────────────────────────────────────────

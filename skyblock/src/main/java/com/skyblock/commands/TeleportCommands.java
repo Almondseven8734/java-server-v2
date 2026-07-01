@@ -14,10 +14,12 @@ import java.util.logging.Logger;
  *
  * Translated from teleport_commands.js.
  *
- * Registers three commands:
+ * Registers two commands:
  *   /mine      — teleports to the mine entrance
  *   /pvp       — teleports to the PvP arena
- *   /dungeons  — informs the player that dungeons are unavailable
+ *
+ * (/dungeons used to be a stub handled here; it's now a real alias of
+ * /dungeon, routed to DungeonCommand - see plugin.yml.)
  *
  * Register in plugin.yml:
  *
@@ -28,9 +30,6 @@ import java.util.logging.Logger;
  *     pvp:
  *       description: Teleport to the PvP arena
  *       usage: /pvp
- *     dungeons:
- *       description: Information about the dungeons
- *       usage: /dungeons
  */
 public class TeleportCommands implements CommandExecutor {
 
@@ -46,7 +45,7 @@ public class TeleportCommands implements CommandExecutor {
 
     public TeleportCommands(Logger logger) {
         this.logger = logger;
-        logger.info("[Teleport] /mine, /pvp, and /dungeons commands loaded.");
+        logger.info("[Teleport] /mine and /pvp commands loaded.");
     }
 
     @Override
@@ -70,11 +69,6 @@ public class TeleportCommands implements CommandExecutor {
             case "pvp": {
                 Location dest = new Location(world, PVP_X, PVP_Y, PVP_Z, PVP_YAW, PVP_PITCH);
                 teleport(player, dest, "§aTeleported to the §cPvP Arena§a!");
-                break;
-            }
-
-            case "dungeons": {
-                player.sendMessage("§c§l[DUNGEONS] §r§cDungeons are currently unavailable.");
                 break;
             }
 
