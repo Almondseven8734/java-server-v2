@@ -180,14 +180,20 @@ public final class DungeonRoomPlanner {
                 // Floor layers — always solid, themed.
                 for (int y = floorY; y < floorY + SOLID_FLOOR_LAYERS; y++) {
                     Material m = (random.nextDouble() < 0.07) ? pick(accent) : pick(primary);
-                    world.getBlockAt(wx, y, wz).setType(m);
+                    // applyPhysics=false: bulk carving must never trigger
+                    // neighbor block-update cascades. Those cascades call
+                    // getBlockState() on adjacent chunks, and if a
+                    // neighbor chunk isn't loaded yet that forces a
+                    // synchronous chunk load on the main thread - exactly
+                    // the mechanism behind the "chunk wait" watchdog hangs.
+                    world.getBlockAt(wx, y, wz).setType(m, false);
                 }
 
                 // Cave band — noise-driven.
                 for (int y = caveMinY; y <= caveMaxY; y++) {
                     double n = noise.sample(wx * FREQ_XZ, y * FREQ_Y, wz * FREQ_XZ);
                     if (n < CAVE_THRESHOLD) {
-                        world.getBlockAt(wx, y, wz).setType(Material.AIR);
+                        world.getBlockAt(wx, y, wz).setType(Material.AIR, false);
                         anyOpen = true;
                     }
                     // else: leave as stone (already placed by StoneBufferGenerator)

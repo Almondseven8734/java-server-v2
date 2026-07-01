@@ -181,6 +181,10 @@ public class SkyblockPlugin extends JavaPlugin {
             Location portalCorner2 = DungeonHubBuilder.portalCorner2(dungeonWorld, (int) floor1OriginX, (int) floor1OriginZ);
 
             DungeonPlayerStateStorage dungeonStateStorage = new DungeonPlayerStateStorage(getDataFolder(), getLogger());
+            spawnCommand.setDungeonSkipCheck(p -> {
+                var st = dungeonStateStorage.get(p.getUniqueId());
+                return st != null && st.isInsideDungeon();
+            });
             FloorThemeRegistry dungeonThemeRegistry = new FloorThemeRegistry();
             java.util.Random dungeonRandom = new java.util.Random();
 

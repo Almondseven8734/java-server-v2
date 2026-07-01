@@ -69,6 +69,21 @@ public final class DungeonFrontierListener implements Listener {
         DungeonPlayerState state = stateLookup.apply(player.getUniqueId());
         if (state == null || !state.isInsideDungeon()) return;
 
+        // Dimension-identity guard: isInsideDungeon() is a persisted flag
+        // and can go stale (relog after a code change, a bypassed exit,
+        // etc.) independently of which World the player is actually
+        // standing in. Without this check, a flagged player walking
+        // around in ANY world - including the overworld hub, whose
+        // spawn XZ happens to sit right on top of the dungeon's own
+        // Floor 1 origin - would silently drive real, synchronous cave
+        // generation inside the dungeon dimension every time they take
+        // a step. Terrain generation must only ever be triggered by
+        // players who are physically inside the dungeon world.
+        if (!player.getWorld().equals(floorManager.dungeonWorld())) {
+            state.clearDungeonState(); // self-heal: they're not really in the dungeon
+            return;
+        }
+
         int floorNumber = state.getCurrentFloor();
         if (floorNumber < 1) return; // Floor 0 is the static entrance hub
 

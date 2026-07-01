@@ -50,6 +50,19 @@ public class SpawnCommand implements CommandExecutor, Listener {
     private final JavaPlugin plugin;
     private final Logger     logger;
 
+    /**
+     * Optional hook set by the dungeon system after it initializes.
+     * Returns true if this player should be left alone on join because
+     * DungeonJoinQuitListener is about to (or already did) resume them
+     * inside the dungeon. Defaults to "never skip" so behavior is
+     * unchanged for servers without the dungeon module wired up.
+     */
+    private java.util.function.Predicate<Player> skipAutoTeleport = p -> false;
+
+    public void setDungeonSkipCheck(java.util.function.Predicate<Player> check) {
+        this.skipAutoTeleport = (check != null) ? check : (p -> false);
+    }
+
     // ─── Constructor ──────────────────────────────────────────────────────────
 
     public SpawnCommand(JavaPlugin plugin, Logger logger) {
@@ -96,7 +109,18 @@ public class SpawnCommand implements CommandExecutor, Listener {
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        // Teleport every player to hub/spawn on login, regardless of prior location
+
+        // Don't fight DungeonJoinQuitListener over where this player
+        // belongs. If they logged out inside the dungeon, resuming them
+        // there is the deliberate, correct outcome - sending them to the
+        // overworld hub instead is what caused players to get silently
+        // bounced (and previously raced against the dungeon resume,
+        // leaving the dungeon flag pointed at the wrong world entirely).
+        if (skipAutoTeleport.test(player)) {
+            return;
+        }
+
+        // Teleport every other player to hub/spawn on login, regardless of prior location
         new BukkitRunnable() {
             @Override public void run() {
                 try {

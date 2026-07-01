@@ -25,6 +25,7 @@ public final class DungeonPortalHandler implements Listener {
     private final Function<UUID, DungeonPlayerState> stateLookup;
     private final Location spawnLocation;
     private final Logger logger;
+    private final org.bukkit.World dungeonWorld;
 
     private final double minX;
     private final double minY;
@@ -41,6 +42,7 @@ public final class DungeonPortalHandler implements Listener {
         this.stateLookup = stateLookup;
         this.spawnLocation = spawnLocation;
         this.logger = logger;
+        this.dungeonWorld = portalCorner1.getWorld();
 
         this.minX = Math.min(portalCorner1.getX(), portalCorner2.getX());
         this.minY = Math.min(portalCorner1.getY(), portalCorner2.getY());
@@ -61,6 +63,14 @@ public final class DungeonPortalHandler implements Listener {
 
         if (state == null || !state.isInsideDungeon()) {
             return; // not currently inside the dungeon, portal trigger doesn't apply
+        }
+
+        // Same dimension-identity guard as DungeonFrontierListener: only
+        // act on the portal region if the player is actually in the
+        // dungeon world, not just carrying a stale flag.
+        if (!player.getWorld().equals(dungeonWorld)) {
+            state.clearDungeonState();
+            return;
         }
 
         if (!isInsidePortalRegion(event.getTo())) {
