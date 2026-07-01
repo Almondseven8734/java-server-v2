@@ -105,6 +105,8 @@ public final class DungeonResetScheduler {
 
         World freshWorld = new WorldCreator(worldName)
                 .generator(generatorFactory.create())
+                .environment(World.Environment.NORMAL)
+                .generateStructures(false)
                 .createWorld();
 
         if (freshWorld == null) {

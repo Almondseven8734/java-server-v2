@@ -155,20 +155,20 @@ public class SkyblockPlugin extends JavaPlugin {
         TestForms testForms = new TestForms(this, getLogger());
 
         // ── Dungeon ──────────────────────────────────────────────────────────
-        // World layout: Floor 1's origin sits at (1,000,000 / 1,000,000) in
-        // the dungeon world, far from spawn/origin to avoid any conflict
-        // with other generated terrain. Floor 0 (entrance hub) sits
-        // FLOOR_0_TO_FLOOR_1_OFFSET blocks east (+X) of that origin - i.e.
-        // on the east side of Floor 1 - and every floor below shares that
-        // same XZ origin, stacked directly downward.
+        // The dungeon lives in its own private world - no offset needed.
+        // Floor 1's origin is (0, 0) in that world. Floor 0 (entrance hub)
+        // sits FLOOR_0_TO_FLOOR_1_OFFSET blocks east (+X) of that origin
+        // (i.e. at world X=2000), on the east side of Floor 1.
         FloorBounds dungeonFloorBounds = FloorBounds.standardWorld();
-        double floor1OriginX = 1_000_000;
-        double floor1OriginZ = 1_000_000;
+        double floor1OriginX = 0;
+        double floor1OriginZ = 0;
 
         World dungeonWorld = getServer().getWorld("dungeon");
         if (dungeonWorld == null) {
             dungeonWorld = new WorldCreator("dungeon")
                 .generator(new DungeonWorldGenerator(dungeonFloorBounds, floor1OriginX, floor1OriginZ))
+                .environment(World.Environment.NORMAL)
+                .generateStructures(false)
                 .createWorld();
         }
         if (dungeonWorld == null) {
@@ -272,11 +272,15 @@ public class SkyblockPlugin extends JavaPlugin {
                 adminState.setInsideDungeon(true);
                 adminState.setCurrentFloor(1);
 
-                Location dungeonEntrance = new Location(finalDungeonWorld, 1002000, 310, 1000000);
+                // Teleport to just inside Floor 0's entrance hub — derived
+                // from the hub builder so it stays correct if the hub layout
+                // ever changes, not hardcoded.
+                Location dungeonEntrance = DungeonHubBuilder.entranceLocation(
+                        finalDungeonWorld, (int) floor1OriginX, (int) floor1OriginZ);
                 adminPlayer.teleport(dungeonEntrance);
-                finalDungeonFloorManager.onPlayerFrontier(1, dungeonEntrance.getX(), dungeonEntrance.getZ());
+                finalDungeonFloorManager.onPlayerFrontier(1, floor1OriginX, floor1OriginZ);
 
-                adminPlayer.sendMessage("§aDungeon generation initialized - teleported to the Floor 1 entrance.");
+                adminPlayer.sendMessage("§aDungeon generation initialized - teleported to the dungeon entrance.");
             });
         }
 

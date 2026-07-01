@@ -5,6 +5,7 @@ com/skyblock/dungeon/spawn/DungeonChestRoomPlacer.class
 com/skyblock/dungeon/floor/DungeonFloorManager.class
 com/skyblock/ah/AhSystem$GuiState$Type.class
 com/skyblock/dungeon/util/DungeonCommandLockdown.class
+com/skyblock/dungeon/gen/DungeonRoomPlanner$CaveNoise.class
 com/skyblock/dungeon/floor/DungeonHubBuilder.class
 com/skyblock/dungeon/floor/DungeonStaircaseOrchestrator.class
 com/skyblock/shop/ShopSystem$ShopItem.class

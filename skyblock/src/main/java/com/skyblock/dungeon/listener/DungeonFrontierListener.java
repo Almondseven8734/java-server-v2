@@ -14,17 +14,34 @@ import java.util.UUID;
 import java.util.function.Function;
 
 /**
- * The missing link between "a player moved" and "the dungeon
- * generates near them": every move event for a player currently
- * inside the dungeon and on a real floor (not Floor 0, which never
- * generates) is forwarded into DungeonFloorManager.onPlayerFrontier
- * and DungeonBossRoomTrigger.onPlayerPosition.
+ * Drives dungeon cave generation ahead of moving players.
  *
- * Throttled to whole-block movement only (PlayerMoveEvent fires on
- * sub-block head/camera movement too, which would otherwise call into
- * the generation planner far more often than needed).
+ * On every whole-block XZ move for a player inside the dungeon, this
+ * fires generation at TWO points:
+ *
+ *   1. The player's current position — keeps content carved right at
+ *      their feet so they're never standing on uncarved stone.
+ *
+ *   2. A look-ahead point: LOOK_AHEAD_DISTANCE blocks forward along
+ *      the player's current yaw — so the cave is already carved by
+ *      the time the player walks there. This is the key difference
+ *      from the old model where the player's own footstep literally
+ *      created the path. The cave carver runs ahead; the player just
+ *      discovers it.
+ *
+ * Both calls go into DungeonFloorManager.onPlayerFrontier() which
+ * dispatches to DungeonRoomPlanner.planAndCarveNear(). That method is
+ * idempotent (skips already-carved chunks), so the double-call is cheap
+ * once an area is established.
  */
 public final class DungeonFrontierListener implements Listener {
+
+    /**
+     * How far ahead (in blocks) to project generation along the player's
+     * facing direction. Sized to comfortably pre-carve 2-3 chunk columns
+     * before the player reaches them at normal walking speed.
+     */
+    private static final int LOOK_AHEAD_DISTANCE = 80;
 
     private final Function<UUID, DungeonPlayerState> stateLookup;
     private final DungeonFloorManager floorManager;
@@ -33,40 +50,44 @@ public final class DungeonFrontierListener implements Listener {
     public DungeonFrontierListener(Function<UUID, DungeonPlayerState> stateLookup,
                                     DungeonFloorManager floorManager,
                                     DungeonBossRoomTrigger bossRoomTrigger) {
-        this.stateLookup = stateLookup;
-        this.floorManager = floorManager;
+        this.stateLookup    = stateLookup;
+        this.floorManager   = floorManager;
         this.bossRoomTrigger = bossRoomTrigger;
     }
 
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
-        Location to = event.getTo();
+        Location to   = event.getTo();
         Location from = event.getFrom();
-        if (to == null) {
-            return;
-        }
-        if (to.getBlockX() == from.getBlockX() && to.getBlockZ() == from.getBlockZ()) {
-            return; // only whole-block XZ movement triggers generation checks
-        }
+        if (to == null) return;
+
+        // Only fire on whole-block XZ movement — sub-block head rotation
+        // would otherwise spam the generator for no benefit.
+        if (to.getBlockX() == from.getBlockX() && to.getBlockZ() == from.getBlockZ()) return;
 
         Player player = event.getPlayer();
         DungeonPlayerState state = stateLookup.apply(player.getUniqueId());
-        if (state == null || !state.isInsideDungeon()) {
-            return;
-        }
+        if (state == null || !state.isInsideDungeon()) return;
 
         int floorNumber = state.getCurrentFloor();
-        if (floorNumber < 1) {
-            return; // Floor 0 is the static entrance hub - it never generates
-        }
+        if (floorNumber < 1) return; // Floor 0 is the static entrance hub
 
+        // 1. Generate at player's current position.
         floorManager.onPlayerFrontier(floorNumber, to.getX(), to.getZ());
 
+        // 2. Project LOOK_AHEAD_DISTANCE blocks along the player's yaw and
+        //    generate there too, so the cave exists before the player arrives.
+        double yawRad = Math.toRadians(to.getYaw());
+        double lookX  = to.getX() - Math.sin(yawRad) * LOOK_AHEAD_DISTANCE;
+        double lookZ  = to.getZ() + Math.cos(yawRad) * LOOK_AHEAD_DISTANCE;
+        floorManager.onPlayerFrontier(floorNumber, lookX, lookZ);
+
+        // Boss room proximity check — only needs the player's actual position.
         DungeonRoom bossRoom = floorManager.getBossRoom(floorNumber);
         if (bossRoom != null) {
             int floorBottomY = floorManager.floorBounds().floorBottomY(floorNumber);
-            bossRoomTrigger.onPlayerPosition(floorManager.dungeonWorld(), floorNumber, floorBottomY,
-                    bossRoom, to.getX(), to.getZ());
+            bossRoomTrigger.onPlayerPosition(floorManager.dungeonWorld(), floorNumber,
+                    floorBottomY, bossRoom, to.getX(), to.getZ());
         }
     }
 }
