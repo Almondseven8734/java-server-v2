@@ -96,6 +96,7 @@ com/skyblock/commands/CrateCommand.class
 com/skyblock/dungeon/loot/DungeonRarityRoller.class
 com/skyblock/dev/TestForms.class
 com/skyblock/ah/AhSystem.class
+com/skyblock/dungeon/floor/DungeonWorldNameStore.class
 com/skyblock/admin/AdminSystem$DungeonAdminHandler.class
 com/skyblock/dungeon/floor/StaircasePlacementValidator$RoomContainmentCheck.class
 com/skyblock/crates/CrateSystem$SelectedReward.class

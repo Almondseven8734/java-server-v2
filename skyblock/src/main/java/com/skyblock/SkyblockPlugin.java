@@ -164,13 +164,28 @@ public class SkyblockPlugin extends JavaPlugin {
         double floor1OriginX = 0;
         double floor1OriginZ = 0;
 
-        World dungeonWorld = getServer().getWorld("dungeon");
+        // Reset cycles hand the dungeon a brand-new, seed+date-derived
+        // folder name each time (see DungeonResetScheduler /
+        // DungeonWorldNameStore) rather than reusing a fixed name - so
+        // startup has to ask what the CURRENT name is instead of
+        // hardcoding one, or a restart mid-cycle would silently create/
+        // load the wrong folder. If no record exists yet (first-ever
+        // startup), generate one now using the same scheme so it's
+        // prunable by future resets like any other cycle.
+        String currentDungeonWorldName = com.skyblock.dungeon.floor.DungeonWorldNameStore
+                .load(getDataFolder(), getLogger())
+                .orElseGet(() -> com.skyblock.dungeon.floor.DungeonWorldNameStore
+                        .generateNextName(java.util.concurrent.ThreadLocalRandom.current().nextLong()));
+        World dungeonWorld = getServer().getWorld(currentDungeonWorldName);
         if (dungeonWorld == null) {
-            dungeonWorld = new WorldCreator("dungeon")
+            dungeonWorld = new WorldCreator(currentDungeonWorldName)
                 .generator(new DungeonWorldGenerator(dungeonFloorBounds, floor1OriginX, floor1OriginZ))
                 .environment(World.Environment.NORMAL)
                 .generateStructures(false)
                 .createWorld();
+            // First-ever startup, no record file yet - write one now so
+            // a restart before the first reset still finds this name.
+            com.skyblock.dungeon.floor.DungeonWorldNameStore.save(getDataFolder(), currentDungeonWorldName, getLogger());
         }
         if (dungeonWorld == null) {
             getLogger().severe("[Dungeon] Failed to create/load the dungeon world - dungeon system disabled.");
@@ -227,7 +242,7 @@ public class SkyblockPlugin extends JavaPlugin {
             // Built before DungeonCommand since /dungeon reset needs it -
             // moved up from where it's started further down.
             DungeonResetScheduler dungeonResetSchedulerLocal = new DungeonResetScheduler(
-                this, dungeonFloorManager, "dungeon",
+                this, dungeonFloorManager, getDataFolder(),
                 () -> new DungeonWorldGenerator(dungeonFloorBounds, floor1OriginX, floor1OriginZ),
                 () -> getServer().getWorlds().get(0).getSpawnLocation(),
                 getLogger()

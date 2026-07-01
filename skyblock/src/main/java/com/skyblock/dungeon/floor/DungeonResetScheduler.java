@@ -7,6 +7,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.File;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -14,9 +15,27 @@ import java.util.logging.Logger;
  * Drives the dungeon's weekly reset cycle: every player still inside
  * gets ejected to spawn (with their items - this is a scheduled
  * server reset, not a death, so no item loss applies), the dungeon
- * world is deleted and recreated from scratch with a fresh
- * StoneBufferGenerator, and DungeonFloorManager.resetAll() clears all
- * in-memory floor/graph/boss state to match.
+ * world is torn down and recreated from scratch under a brand-new
+ * folder name with a fresh StoneBufferGenerator, and
+ * DungeonFloorManager.resetAll() clears all in-memory floor/graph/boss
+ * state to match.
+ *
+ * Why a NEW folder name every reset, instead of deleting and
+ * recreating "dungeon" in place: earlier fixes here tried unloading,
+ * verifying deletion with retries, and even renaming the old folder
+ * aside before recreating under the same name - all of which still
+ * left recreation happening at the exact same absolute path the old
+ * world had just occupied. That's the trap. Paper/Bukkit's region-file
+ * and chunk caching is keyed by path, not by World instance, so a
+ * world recreated at a path that was JUST vacated can end up resolving
+ * chunk reads through a stale cached handle instead of the genuinely
+ * fresh bytes on disk - which looks exactly like "the reset ran, but
+ * the old world is still there" (including manually-dug holes that
+ * fresh generation could never reproduce on its own). Giving every
+ * reset a folder name nobody has ever used before removes the shared
+ * path entirely, so there's nothing for any caching layer to collide
+ * with. See DungeonWorldNameStore for how the current name survives
+ * a server restart mid-cycle.
  *
  * Call start() once during plugin onEnable; call cancel() in
  * onDisable to avoid a dangling task across reloads.
@@ -28,7 +47,7 @@ public final class DungeonResetScheduler {
 
     private final JavaPlugin plugin;
     private final DungeonFloorManager floorManager;
-    private final String dungeonWorldName;
+    private final File dataFolder;
     private final ChunkGeneratorFactory generatorFactory;
     private final java.util.function.Supplier<org.bukkit.Location> spawnLocationSupplier;
     private final Logger logger;
@@ -72,13 +91,20 @@ public final class DungeonResetScheduler {
         ChunkGenerator create();
     }
 
-    public DungeonResetScheduler(JavaPlugin plugin, DungeonFloorManager floorManager, String dungeonWorldName,
+    /**
+     * @param dataFolder the plugin's data folder, used to persist which
+     *                    world folder name is currently live (see
+     *                    DungeonWorldNameStore) so a server restart
+     *                    mid-cycle doesn't fall back to the stale
+     *                    default name.
+     */
+    public DungeonResetScheduler(JavaPlugin plugin, DungeonFloorManager floorManager, File dataFolder,
                                   ChunkGeneratorFactory generatorFactory,
                                   java.util.function.Supplier<org.bukkit.Location> spawnLocationSupplier,
                                   Logger logger) {
         this.plugin = plugin;
         this.floorManager = floorManager;
-        this.dungeonWorldName = dungeonWorldName;
+        this.dataFolder = dataFolder;
         this.generatorFactory = generatorFactory;
         this.spawnLocationSupplier = spawnLocationSupplier;
         this.logger = logger;
@@ -122,16 +148,14 @@ public final class DungeonResetScheduler {
      * Forces an immediate reset, e.g. via an admin command, outside the
      * normal weekly schedule.
      *
-     * The actual unload/delete/recreate is deferred one tick after the
+     * The actual unload/recreate is deferred one tick after the
      * ejection teleports: Bukkit.unloadWorld() refuses to unload a world
      * that still has players in it, and a same-tick check right after
      * calling player.teleport() across worlds isn't guaranteed to see
      * the transfer as fully complete yet. Without the delay, unloadWorld
      * can spuriously return false, silently aborting the whole reset
-     * (world never deleted, floor state already wiped) - which looks
-     * exactly like "the reset didn't work" from the console/logs and,
-     * on the next server restart, the untouched old world simply
-     * reloads as if nothing happened.
+     * (world never recreated, floor state already wiped) - which looks
+     * exactly like "the reset didn't work" from the console/logs.
      */
     public void performReset() {
         logger.info("[Dungeon] Starting weekly dungeon reset...");
@@ -152,91 +176,44 @@ public final class DungeonResetScheduler {
         Bukkit.getScheduler().runTask(plugin, () -> finishReset(oldWorld));
     }
 
-    /** How many extra attempts to give a stubborn file/directory before giving up on it. */
+    /** How many extra attempts to give a stubborn file/directory before giving up on it (background cleanup only). */
     private static final int DELETE_RETRY_ATTEMPTS = 5;
 
     /** Backoff between delete retries - region files can stay open briefly after unloadWorld() returns. */
     private static final long DELETE_RETRY_DELAY_MS = 100L;
 
     private void finishReset(World oldWorld) {
-        String worldName = oldWorld.getName();
+        String oldWorldName = oldWorld.getName();
         boolean unloaded = Bukkit.unloadWorld(oldWorld, false);
         if (!unloaded) {
-            logger.warning("[Dungeon] Failed to unload dungeon world '" + worldName + "' - reset aborted, "
+            logger.warning("[Dungeon] Failed to unload dungeon world '" + oldWorldName + "' - reset aborted, "
                     + "in-memory floor state was already cleared but the old world is still active. "
                     + "This usually means a player (or entity holding a reference) is still in the world - "
                     + "check for anyone who reconnected mid-reset.");
             return;
         }
 
-        java.io.File container = Bukkit.getWorldContainer();
-        java.io.File worldFolder = new java.io.File(container, worldName);
+        // The new world gets a folder name that has never existed before
+        // on this server - not a fixed literal reused every time. That's
+        // the actual fix: it guarantees nothing (on-disk data, an open
+        // file handle, or an internal cache keyed by path) can carry over
+        // from any old world, because nothing ever shared this exact path
+        // before. No race with any old folder's deletion to gamble on,
+        // because recreation doesn't depend on anything being gone first.
+        long seed = java.util.concurrent.ThreadLocalRandom.current().nextLong();
+        String newWorldName = DungeonWorldNameStore.generateNextName(seed);
+        DungeonWorldNameStore.save(dataFolder, newWorldName, logger);
 
-        if (worldFolder.exists()) {
-            // unloadWorld() returning true does NOT guarantee every region
-            // file's handle is actually released yet, especially for a
-            // heavily-explored area with many files (the small, always
-            // force-repainted hub folder was never a real test of this -
-            // it looks "reset" regardless because DungeonHubBuilder
-            // overwrites it unconditionally). Deleting in place and then
-            // immediately recreating under the same name gambles on that
-            // timing - if any file is still locked, WorldCreator silently
-            // loads the stale leftovers instead of generating fresh.
-            //
-            // Renaming sidesteps the race entirely: a rename doesn't
-            // require the OS to have released open file handles, so it
-            // succeeds instantly, freeing the "dungeon" name for a
-            // guaranteed-empty recreation. The actual bytes of the old
-            // world get deleted from the renamed-away folder in the
-            // background, at leisure - success or failure there can no
-            // longer affect the live dungeon.
-            java.io.File trashFolder = new java.io.File(container, worldName + "_old_" + System.currentTimeMillis());
-            boolean renamed = worldFolder.renameTo(trashFolder);
-
-            if (!renamed) {
-                logger.warning("[Dungeon] Could not rename old dungeon world folder aside (unexpected - check "
-                        + "permissions or whether the world container is on a filesystem that supports atomic "
-                        + "rename). Falling back to deleting it in place before recreating.");
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                    boolean deleted = deleteRecursively(worldFolder);
-                    if (!deleted || worldFolder.exists()) {
-                        logger.severe("[Dungeon] Failed to fully delete old dungeon world folder '" + worldName
-                                + "' after " + DELETE_RETRY_ATTEMPTS + " retries per file - aborting recreation "
-                                + "rather than silently loading the stale world. In-memory floor state was "
-                                + "already reset; a manual server restart or manual folder delete followed by "
-                                + "/dungeon reset will be needed.");
-                        return;
-                    }
-                    Bukkit.getScheduler().runTask(plugin, () -> recreateWorld(worldName));
-                });
-                return;
-            }
-
-            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                if (!deleteRecursively(trashFolder)) {
-                    logger.warning("[Dungeon] Old dungeon data at '" + trashFolder.getPath() + "' could not be "
-                            + "fully cleaned up in the background. Functionally harmless - the live dungeon is "
-                            + "unaffected since it's already running under a fresh folder - but delete it "
-                            + "manually next time you're on the box to reclaim disk space.");
-                }
-            });
-        }
-
-        // The name is free (either it never existed, or was just renamed
-        // away above) - safe to recreate immediately, same tick, no
-        // waiting on anything.
-        recreateWorld(worldName);
-    }
-
-    private void recreateWorld(String worldName) {
-        World freshWorld = new WorldCreator(worldName)
+        World freshWorld = new WorldCreator(newWorldName)
                 .generator(generatorFactory.create())
                 .environment(World.Environment.NORMAL)
                 .generateStructures(false)
                 .createWorld();
 
         if (freshWorld == null) {
-            logger.severe("[Dungeon] Failed to recreate dungeon world '" + worldName + "' after reset!");
+            logger.severe("[Dungeon] Failed to recreate dungeon world '" + newWorldName + "' after reset! "
+                    + "The old world '" + oldWorldName + "' was already unloaded and is not being restored - "
+                    + "manual intervention needed.");
             return;
         }
 
@@ -247,16 +224,86 @@ public final class DungeonResetScheduler {
         floorManager.setDungeonWorld(freshWorld);
         onWorldRecreated.accept(freshWorld);
 
-        logger.info("[Dungeon] Weekly dungeon reset complete - world '" + worldName + "' regenerated.");
+        logger.info("[Dungeon] Weekly dungeon reset complete - now running under new world folder '"
+                + newWorldName + "'.");
+
+        // Sweep the world container for every folder that matches our
+        // naming scheme and is older than the cycle we just started, and
+        // prune all of them in the background - not just the single
+        // folder we know we just replaced. A plain "delete the previous
+        // folder" approach silently leaks disk space forever the moment
+        // any one cleanup fails (a crash mid-delete, a locked file that
+        // outlasts the retry budget, a server restart between resets) -
+        // this sweep is self-healing across cycles instead of depending
+        // on every single prior cleanup having succeeded.
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> pruneOldDungeonWorlds(newWorldName));
+    }
+
+    /**
+     * Finds every world folder matching DungeonWorldNameStore's naming
+     * scheme whose encoded date is older than {@code currentWorldName}'s,
+     * and deletes them. Purely best-effort background cleanup - nothing
+     * live depends on this succeeding, since the dungeon is already
+     * running under {@code currentWorldName} by the time this runs.
+     */
+    private void pruneOldDungeonWorlds(String currentWorldName) {
+        java.util.Optional<java.time.Instant> currentInstant = DungeonWorldNameStore.extractInstant(currentWorldName);
+        if (currentInstant.isEmpty()) {
+            // We generated this name ourselves - shouldn't happen - but if
+            // it somehow doesn't parse, don't risk pruning against a bad
+            // reference point.
+            logger.warning("[Dungeon] Could not parse a date out of the world name we just created ('"
+                    + currentWorldName + "') - skipping old-world pruning this cycle.");
+            return;
+        }
+
+        File container = Bukkit.getWorldContainer();
+        File[] candidates = container.listFiles(File::isDirectory);
+        if (candidates == null) {
+            return;
+        }
+
+        for (File candidate : candidates) {
+            String name = candidate.getName();
+            if (name.equals(currentWorldName)) {
+                continue; // never prune the world we're actively running
+            }
+
+            java.util.Optional<java.time.Instant> candidateInstant = DungeonWorldNameStore.extractInstant(name);
+            if (candidateInstant.isEmpty()) {
+                // Doesn't match our naming scheme at all - e.g. "world",
+                // "world_nether", a pre-this-fix legacy "dungeon" folder,
+                // or something unrelated entirely. Never touch it.
+                continue;
+            }
+
+            if (!candidateInstant.get().isBefore(currentInstant.get())) {
+                // Same age or (shouldn't happen) newer than what we just
+                // made - leave it alone rather than guess.
+                continue;
+            }
+
+            if (Bukkit.getWorld(name) != null) {
+                // Defensive: never delete a folder backing a currently
+                // loaded World object, no matter what its name/date says.
+                continue;
+            }
+
+            if (deleteRecursively(candidate)) {
+                logger.info("[Dungeon] Pruned old dungeon world folder '" + name + "'.");
+            } else {
+                logger.warning("[Dungeon] Old dungeon world folder '" + candidate.getPath() + "' could not be "
+                        + "fully pruned this cycle - functionally harmless, it'll be retried on the next reset.");
+            }
+        }
     }
 
     /**
      * Deletes a file or directory tree, retrying each individual delete a
      * few times with a short backoff to ride out files that are still
      * briefly locked by async chunk-save I/O right after unloadWorld().
-     * Returns true only if everything under (and including) {@code file}
-     * was actually removed - never assume success just because no
-     * exception was thrown.
+     * Purely best-effort background cleanup now - nothing live depends
+     * on its result.
      */
     private boolean deleteRecursively(java.io.File file) {
         if (!file.exists()) {
@@ -272,8 +319,6 @@ public final class DungeonResetScheduler {
         }
 
         if (!allChildrenDeleted) {
-            // Don't even try to delete this directory - it still has
-            // stubborn children in it, so file.delete() would just fail.
             return false;
         }
 
