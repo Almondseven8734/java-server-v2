@@ -175,6 +175,16 @@ public final class DungeonFloorManager {
         return dungeonWorld;
     }
 
+    /** Floor 1's origin X - needed by anything detecting the Floor 0 hub → Floor 1 crossing. */
+    public double floor1OriginX() {
+        return floor1OriginX;
+    }
+
+    /** Floor 1's origin Z - needed by anything detecting the Floor 0 hub → Floor 1 crossing. */
+    public double floor1OriginZ() {
+        return floor1OriginZ;
+    }
+
     /**
      * Repoints this manager at a freshly (re)created dungeon World.
      * dungeonWorld was a `final` field before this fix - after

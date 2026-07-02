@@ -85,7 +85,25 @@ public final class DungeonFrontierListener implements Listener {
         }
 
         int floorNumber = state.getCurrentFloor();
-        if (floorNumber < 1) return; // Floor 0 is the static entrance hub
+        if (floorNumber < 1) {
+            // Floor 0 is the static entrance hub - nothing generates there.
+            // But DungeonCommand only ever sets currentFloor to 0 on entry;
+            // nothing else was ever promoting a player to Floor 1 once they
+            // physically walked out through the hub's west doorway, which
+            // meant floorNumber stayed 0 forever and this method returned
+            // every single tick - real players never reached the frontier
+            // carve call below, only ever seeing DungeonWorldGenerator's
+            // static stone blockout. Detect the crossing here: once the
+            // player's XZ falls inside Floor 1's own generation leash
+            // (they've stepped past the doorway into real floor space),
+            // promote them and fall through to carve immediately instead
+            // of waiting for another move event.
+            boolean enteredFloor1 = floorManager.floorBounds().isWithinGenerationRadius(
+                    floorManager.floor1OriginX(), floorManager.floor1OriginZ(), to.getX(), to.getZ());
+            if (!enteredFloor1) return;
+            state.setCurrentFloor(1);
+            floorNumber = 1;
+        }
 
         // 1. Generate at player's current position.
         floorManager.onPlayerFrontier(floorNumber, to.getX(), to.getZ());
